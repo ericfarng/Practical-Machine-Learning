@@ -1,0 +1,117 @@
+---
+title: "Practical Machine Learning"
+author: "Eric Farng"
+date: "Monday, March 16, 2015"
+output: html_document
+---
+
+## Summary
+
+By using acceloremeters, we can accurately predict different types of movement. In this case, we are able to accurately predict 5 different types of barbell movement with 99.6% accuracy
+
+## Data
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
+
+First we can see that we have approximately 5 equal size sets of our output variable
+
+```{r}
+setwd("~/Coursera/Practical Machine Learning")
+full_train <- read.csv("pml-training.csv")
+table(full_train$classe)
+```
+
+Also, we see that many of the fields are empty. This occurs when new_window == "yes". So we remove all the empty fields and also remove rows where these fields are empty.
+
+```{r}
+#summary(full_train)
+column_name <- c('num_window', 
+          "roll_belt", "pitch_belt", "yaw_belt", "total_accel_belt",
+          "gyros_belt_x", "gyros_belt_y", "gyros_belt_z",
+          "accel_belt_x", "accel_belt_y", "accel_belt_z", 
+          "magnet_belt_x", "magnet_belt_y", "magnet_belt_z",
+          "roll_arm", "pitch_arm", "yaw_arm", "total_accel_arm",
+          "gyros_arm_x", "gyros_arm_y", "gyros_arm_z",
+          "accel_arm_x", "accel_arm_y", "accel_arm_z", 
+          "magnet_arm_x", "magnet_arm_y", "magnet_arm_z",
+          "roll_dumbbell", "pitch_dumbbell", "yaw_dumbbell", "total_accel_dumbbell",
+          "gyros_dumbbell_x", "gyros_dumbbell_y", "gyros_dumbbell_z",
+          "accel_dumbbell_x", "accel_dumbbell_y", "accel_dumbbell_z", 
+          "magnet_dumbbell_x", "magnet_dumbbell_y", "magnet_dumbbell_z",
+          "roll_forearm", "pitch_forearm", "yaw_forearm", "total_accel_dumbbell",
+          "gyros_forearm_x", "gyros_forearm_y", "gyros_forearm_z",
+          "accel_forearm_x", "accel_forearm_y", "accel_forearm_z", 
+          "magnet_forearm_x", "magnet_forearm_y", "magnet_forearm_z",
+          "classe")
+
+cut_train <- full_train[full_train$new_window == "no", column_name]
+
+nrow(cut_train)
+```
+
+Next, we split the data into a train set (75%) and validation set (25%)
+```{r}
+library(caret)
+set.seed(2015)
+inTrain <- createDataPartition(y=cut_train$classe, p=0.75, list=FALSE)
+train <- cut_train[inTrain,]
+validate <- cut_train[-inTrain,]
+nrow(train)
+nrow(validate)
+```
+
+Next, we split our training set into a 10-fold cross validation set
+```{r}
+set.seed(2015)
+fitControl <- trainControl(## 10-fold CV
+                           method = "repeatedcv",
+                           number = 10)
+
+```
+
+First, we try training using a plain c5.0 Decision Tree. 
+
+```{r}
+set.seed(2015)
+fit <- train(classe~., data=train, trControl=fitControl, method="C5.0Tree")
+#summary(fit)
+pred <- predict(fit, validate)
+table(pred, validate$classe)
+sum(pred == validate$classe) / nrow(validate)
+```
+
+OUr accuracy here is 97.9% on the validation set
+
+Next, we try training on bagged Decision Trees. 
+```{r}
+set.seed(2015)
+fit2 <- train(classe~., data=train, trControl=fitControl, method="treebag")
+#summary(fit2)
+pred <- predict(fit2, validate)
+table(pred, validate$classe)
+sum(pred == validate$classe) / nrow(validate)
+```
+
+Our accuracy here is 99.7%.
+
+## Conclusion
+
+Using bagged trees, we can achieve an accuracy of 99.7% when trying to predict these 5 different dumbbell movement types.
+
+OUr final predictions for the test set are
+
+```{r}
+full_test <- read.csv("pml-testing.csv")
+cut_test <- full_test[,column_name[1:(length(column_name)-1)]]
+pred <- predict(fit2, cut_test)
+pred
+
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+pml_write_files(pred)
+```
